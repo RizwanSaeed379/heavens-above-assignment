@@ -1,0 +1,166 @@
+name: Code Review Workflow
+
+# Trigger: Runs on pull requests
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [ main, master ]
+
+permissions:
+  contents: read
+  pull-requests: write
+  checks: write
+
+jobs:
+  code-quality:
+    name: Code Quality Analysis
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Full history for better analysis
+    
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18.x'
+        cache: 'npm'
+    
+    - name: Install dependencies
+      run: npm ci
+    
+    - name: Install ESLint
+      run: npm install --save-dev eslint eslint-config-standard
+    
+    - name: Run ESLint
+      run: |
+        echo "Running ESLint..."
+        npx eslint . --ext .js --format json --output-file eslint-report.json || true
+        npx eslint . --ext .js || true
+      continue-on-error: true
+    
+    - name: Generate code quality report
+      run: |
+        echo "## 📊 Code Quality Report" > code-quality-report.md
+        echo "" >> code-quality-report.md
+        echo "Generated: $(date)" >> code-quality-report.md
+        echo "" >> code-quality-report.md
+        echo "### ESLint Results" >> code-quality-report.md
+        echo "\`\`\`" >> code-quality-report.md
+        npx eslint . --ext .js || echo "Linting completed"
+        echo "\`\`\`" >> code-quality-report.md
+    
+    - name: Upload code quality report
+      uses: actions/upload-artifact@v4
+      with:
+        name: code-quality-report
+        path: |
+          code-quality-report.md
+          eslint-report.json
+        retention-days: 30
+
+  security-scan:
+    name: Security Vulnerability Scan
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18.x'
+        cache: 'npm'
+    
+    - name: Install dependencies
+      run: npm ci
+    
+    - name: Run npm audit
+      run: |
+        echo "Running security audit..."
+        npm audit --json > npm-audit.json || true
+        npm audit || true
+      continue-on-error: true
+    
+    - name: Check for known vulnerabilities
+      run: |
+        echo "Checking for security issues..."
+        if npm audit --audit-level=high; then
+          echo "✅ No high-severity vulnerabilities found"
+        else
+          echo "⚠️ Security vulnerabilities detected"
+        fi
+      continue-on-error: true
+    
+    - name: Generate security report
+      run: |
+        echo "## 🔒 Security Scan Report" > security-scan-report.md
+        echo "" >> security-scan-report.md
+        echo "Generated: $(date)" >> security-scan-report.md
+        echo "" >> security-scan-report.md
+        echo "### Vulnerability Summary" >> security-scan-report.md
+        npm audit || echo "See npm-audit.json for details"
+    
+    - name: Upload security scan report
+      uses: actions/upload-artifact@v4
+      with:
+        name: security-scan-report
+        path: |
+          security-scan-report.md
+          npm-audit.json
+        retention-days: 30
+
+  code-standards:
+    name: Coding Standards Check
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Check file structure
+      run: |
+        echo "Checking project structure..."
+        echo "## 📁 Project Structure Analysis" > structure-report.md
+        echo "" >> structure-report.md
+        echo "### Directory Structure" >> structure-report.md
+        echo "\`\`\`" >> structure-report.md
+        tree -L 2 -I 'node_modules' || ls -R
+        echo "\`\`\`" >> structure-report.md
+    
+    - name: Check code formatting
+      run: |
+        echo "Checking code formatting..."
+        # Check for consistent indentation
+        find . -name "*.js" -not -path "*/node_modules/*" -exec grep -l "	" {} \; > tabs.txt || true
+        
+        if [ -s tabs.txt ]; then
+          echo "⚠️ Files with tabs found (should use spaces):"
+          cat tabs.txt
+        else
+          echo "✅ No tab characters found"
+        fi
+    
+    - name: Check for TODO comments
+      run: |
+        echo "Scanning for TODO comments..."
+        grep -r "TODO\|FIXME\|HACK" --include="*.js" . || echo "No TODO comments found"
+    
+    - name: Check file naming conventions
+      run: |
+        echo "Checking file naming conventions..."
+        find . -name "*.js" -not -path "*/node_modules/*" | while read file; do
+          basename "$file"
+        done
+    
+    - name: Upload structure report
+      uses: actions/upload-artifact@v4
+      with:
+        name: structure-report
+        path: structure-report.md
+        retention-days: 30
+
+  complexity-analysis:
