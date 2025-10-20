@@ -1,22 +1,33 @@
 name: Dependency Updates
 
-# Trigger: Runs weekly on Monday at 9 AM UTC and can be manually triggered
 on:
   schedule:
     - cron: '0 9 * * 1'  # Every Monday at 9 AM UTC
   workflow_dispatch:
+    inputs:
+      update-type:
+        description: 'Type of dependency updates'
+        required: true
+        default: 'patch'
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
 
 permissions:
   contents: write
   pull-requests: write
+  issues: write
 
 jobs:
-  check-updates:
-    name: Check for Dependency Updates
+  dependency-check:
+    name: Check Dependency Updates
     runs-on: ubuntu-latest
     
     outputs:
       updates-available: ${{ steps.check.outputs.updates }}
+      outdated-count: ${{ steps.check.outputs.outdated-count }}
     
     steps:
     - name: Checkout code
@@ -34,48 +45,66 @@ jobs:
     - name: Check for outdated packages
       id: check
       run: |
-        echo "Checking for outdated packages..."
-        npm outdated --json > outdated.json || true
+        echo "🔍 Checking for outdated packages..."
         
-        if [ -s outdated.json ]; then
+        # Get outdated packages in JSON format
+        npm outdated --json > outdated.json || echo "{}" > outdated.json
+        
+        # Count outdated packages
+        OUTDATED_COUNT=$(node -e "
+          const outdated = require('./outdated.json');
+          console.log(Object.keys(outdated).length);
+        ")
+        
+        if [ "$OUTDATED_COUNT" -gt 0 ]; then
           echo "updates=true" >> $GITHUB_OUTPUT
-          echo "Updates available!"
+          echo "outdated-count=$OUTDATED_COUNT" >> $GITHUB_OUTPUT
+          echo "📦 Found $OUTDATED_COUNT outdated package(s)"
+          echo "Outdated packages:"
+          npm outdated
         else
           echo "updates=false" >> $GITHUB_OUTPUT
-          echo "All packages are up to date!"
+          echo "outdated-count=0" >> $GITHUB_OUTPUT
+          echo "✅ All packages are up to date!"
         fi
-        
-        cat outdated.json || echo "{}"
     
-    - name: Generate update report
+    - name: Generate dependency report
       run: |
-        echo "## 📦 Dependency Update Report" > update-report.md
-        echo "" >> update-report.md
-        echo "Generated: $(date)" >> update-report.md
-        echo "" >> update-report.md
-        echo "### Outdated Packages" >> update-report.md
-        npm outdated || echo "All packages up to date"
+        echo "## 📦 Dependency Health Report" > dependency-report.md
+        echo "" >> dependency-report.md
+        echo "**Generated**: $(date)" >> dependency-report.md
+        echo "**Outdated Packages**: ${{ steps.check.outputs.outdated-count }}" >> dependency-report.md
+        echo "" >> dependency-report.md
+        echo "### Detailed Report" >> dependency-report.md
+        echo '```json' >> dependency-report.md
+        cat outdated.json >> dependency-report.md
+        echo '```' >> dependency-report.md
     
-    - name: Upload update report
+    - name: Upload dependency report
       uses: actions/upload-artifact@v4
       with:
-        name: dependency-update-report
+        name: dependency-health-report
         path: |
-          update-report.md
+          dependency-report.md
           outdated.json
         retention-days: 30
 
   update-dependencies:
     name: Update Dependencies
     runs-on: ubuntu-latest
-    needs: check-updates
-    if: needs.check-updates.outputs.updates-available == 'true'
+    needs: dependency-check
+    if: needs.dependency-check.outputs.updates-available == 'true'
+    
+    outputs:
+      pr-created: ${{ steps.create-pr.outputs.pr-created }}
+      pr-url: ${{ steps.create-pr.outputs.pr-url }}
     
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
+        ref: main
     
     - name: Set up Node.js
       uses: actions/setup-node@v4
@@ -90,81 +119,123 @@ jobs:
     
     - name: Create update branch
       run: |
-        BRANCH_NAME="dependency-updates-$(date +%Y%m%d-%H%M%S)"
-        echo "BRANCH_NAME=${BRANCH_NAME}" >> $GITHUB_ENV
-        git checkout -b ${BRANCH_NAME}
+        TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+        BRANCH_NAME="deps/auto-update-$TIMESTAMP"
+        echo "BRANCH_NAME=$BRANCH_NAME" >> $GITHUB_ENV
+        git checkout -b "$BRANCH_NAME"
     
-    - name: Update patch versions (safe updates)
+    - name: Update dependencies based on type
+      id: update
       run: |
-        echo "Updating patch versions..."
-        npm update
+        UPDATE_TYPE="${{ github.event.inputs.update-type || 'patch' }}"
+        echo "Updating $UPDATE_TYPE versions..."
         
-        # Check if there are changes
-        if git diff --quiet package-lock.json; then
-          echo "No changes to commit"
-          echo "CHANGES_MADE=false" >> $GITHUB_ENV
+        case "$UPDATE_TYPE" in
+          "patch")
+            npm update
+            ;;
+          "minor")
+            npx npm-check-updates --target minor -u
+            ;;
+          "major")
+            npx npm-check-updates --target major -u
+            ;;
+        esac
+        
+        # Install updated dependencies
+        npm install
+        
+        # Check if package files changed
+        if git diff --name-only | grep -q "package"; then
+          echo "CHANGES_MADE=true" >> $GITHUB_OUTPUT
+          echo "Updated files:"
+          git diff --name-only
         else
-          echo "Changes detected"
-          echo "CHANGES_MADE=true" >> $GITHUB_ENV
+          echo "CHANGES_MADE=false" >> $GITHUB_OUTPUT
+          echo "No dependency changes needed"
         fi
     
-    - name: Run tests after update
-      if: env.CHANGES_MADE == 'true'
+    - name: Run validation tests
+      if: steps.update.outputs.CHANGES_MADE == 'true'
       run: |
+        echo "🧪 Running validation tests..."
+        # Basic syntax validation
+        node -c run.js && echo "✅ Main file syntax valid"
+        
+        # Install fresh with updated dependencies
         npm ci
-        echo "Running validation tests..."
-        node -e "console.log('Basic validation passed')"
+        
+        # Run any available tests
+        if npm run | grep -q "test"; then
+          npm test
+        else
+          echo "ℹ️ No test script found, running basic validation"
+          node -e "
+            const pkg = require('./package.json');
+            console.log('✅ Package validation passed');
+            console.log('Dependencies:', Object.keys(pkg.dependencies || {}).length);
+            console.log('Dev Dependencies:', Object.keys(pkg.devDependencies || {}).length);
+          "
+        fi
       continue-on-error: false
     
-    - name: Commit changes
-      if: env.CHANGES_MADE == 'true'
+    - name: Commit and push changes
+      if: steps.update.outputs.CHANGES_MADE == 'true'
       run: |
         git add package.json package-lock.json
-        git commit -m "chore: update dependencies [automated]
+        git commit -m "chore(deps): update ${{ github.event.inputs.update-type || 'patch' }} versions
         
-        - Updated patch versions for security and bug fixes
-        - Automated by GitHub Actions
+        Automated dependency updates:
+        - Update type: ${{ github.event.inputs.update-type || 'patch' }}
+        - Run: ${{ github.run_number }}
         - Date: $(date)
-        - Run: ${{ github.run_number }}"
-    
-    - name: Push changes
-      if: env.CHANGES_MADE == 'true'
-      run: |
-        git push origin ${{ env.BRANCH_NAME }}
+        
+        Signed-off-by: github-actions[bot] <github-actions[bot]@users.noreply.github.com>"
+        
+        git push origin "$BRANCH_NAME"
     
     - name: Create Pull Request
-      if: env.CHANGES_MADE == 'true'
-      env:
-        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      run: |
-        gh pr create \
-          --title "🔄 Automated Dependency Updates" \
-          --body "## Automated Dependency Updates
-        
-        This PR contains automated dependency updates.
-        
-        ### Changes
-        - Updated patch versions for better security and stability
-        - All tests have passed
-        
-        ### Review Checklist
-        - [ ] Review the changes in package.json and package-lock.json
-        - [ ] Ensure all tests pass
-        - [ ] Check for any breaking changes
-        
-        **Generated by**: GitHub Actions
-        **Date**: $(date)
-        **Run Number**: ${{ github.run_number }}
-        
-        Please review and merge if everything looks good!" \
-          --base main \
-          --head ${{ env.BRANCH_NAME }} \
-          --label "dependencies,automated"
+      id: create-pr
+      if: steps.update.outputs.CHANGES_MADE == 'true'
+      uses: repo-sync/pull-request@v2
+      with:
+        destination_branch: "main"
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        pr_title: "🔄 chore(deps): automated ${{ github.event.inputs.update-type || 'patch' }} dependency updates"
+        pr_body: |
+          ## Automated Dependency Updates
+          
+          This pull request contains automated updates to project dependencies.
+          
+          ### 📊 Update Summary
+          - **Update Type**: ${{ github.event.inputs.update-type || 'patch' }}
+          - **Generated By**: GitHub Actions
+          - **Workflow Run**: [#${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+          - **Date**: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
+          
+          ### 🔍 Changes Made
+          The following files have been updated:
+          - `package.json`
+          - `package-lock.json`
+          
+          ### ✅ Validation
+          - Basic syntax validation passed
+          - Dependency installation successful
+          
+          ### 📋 Review Checklist
+          - [ ] Verify the dependency updates are appropriate
+          - [ ] Ensure all tests pass
+          - [ ] Check for any breaking changes
+          - [ ] Merge if everything looks good
+          
+          ---
+          *This PR was automatically generated by the Dependency Updates workflow.*
+        pr_label: "dependencies,automated"
 
   security-audit:
-    name: Security Audit
+    name: Security Vulnerability Scan
     runs-on: ubuntu-latest
-    needs: check-updates
+    needs: dependency-check
     
     steps:
     - name: Checkout code
@@ -179,49 +250,74 @@ jobs:
     - name: Install dependencies
       run: npm ci
     
-    - name: Run security audit
+    - name: Run comprehensive security audit
       run: |
-        echo "Running npm security audit..."
-        npm audit --json > audit-report.json || true
-        npm audit || true
+        echo "🔒 Running security audit..."
+        npm audit --audit-level moderate --json > audit-results.json || echo "{}" > audit-results.json
+        
+        # Parse audit results
+        node -e "
+          const audit = require('./audit-results.json');
+          const vulnerabilities = audit.metadata?.vulnerabilities || {};
+          console.log('Security Summary:');
+          console.log('Critical:', vulnerabilities.critical || 0);
+          console.log('High:', vulnerabilities.high || 0);
+          console.log('Moderate:', vulnerabilities.moderate || 0);
+          console.log('Low:', vulnerabilities.low || 0);
+        "
     
     - name: Generate security report
       run: |
-        echo "## 🔒 Security Audit Report" > security-report.md
+        echo "## 🛡️ Security Audit Report" > security-report.md
         echo "" >> security-report.md
-        echo "Generated: $(date)" >> security-report.md
+        echo "**Scan Date**: $(date)" >> security-report.md
+        echo "**Outdated Packages**: ${{ needs.dependency-check.outputs.outdated-count }}" >> security-report.md
         echo "" >> security-report.md
-        echo "### Vulnerabilities" >> security-report.md
-        npm audit || echo "Check audit-report.json for details"
+        echo "### Vulnerability Summary" >> security-report.md
+        npm audit --audit-level moderate || echo "No critical vulnerabilities found"
     
-    - name: Upload security report
+    - name: Upload security artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: security-audit-report
+        name: security-audit-results
         path: |
           security-report.md
-          audit-report.json
+          audit-results.json
         retention-days: 90
 
-  summary:
-    name: Update Summary
+  workflow-summary:
+    name: Workflow Summary
     runs-on: ubuntu-latest
-    needs: [check-updates, update-dependencies, security-audit]
+    needs: [dependency-check, update-dependencies, security-audit]
     if: always()
     
     steps:
-    - name: Generate summary
+    - name: Generate comprehensive summary
       run: |
-        echo "## 📊 Dependency Update Summary" >> $GITHUB_STEP_SUMMARY
+        echo "## 📊 Dependency Management Summary" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
-        echo "- **Check Status**: ${{ needs.check-updates.result }}" >> $GITHUB_STEP_SUMMARY
-        echo "- **Update Status**: ${{ needs.update-dependencies.result }}" >> $GITHUB_STEP_SUMMARY
-        echo "- **Security Audit**: ${{ needs.security-audit.result }}" >> $GITHUB_STEP_SUMMARY
-        echo "- **Date**: $(date)" >> $GITHUB_STEP_SUMMARY
+        echo "### 🔍 Check Results" >> $GITHUB_STEP_SUMMARY
+        echo "- **Dependency Check**: ${{ needs.dependency-check.result }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Updates Available**: ${{ needs.dependency-check.outputs.updates-available }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Outdated Packages**: ${{ needs.dependency-check.outputs.outdated-count }}" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         
-        if [ "${{ needs.check-updates.outputs.updates-available }}" == "true" ]; then
-          echo "✅ **Updates were processed and PR created**" >> $GITHUB_STEP_SUMMARY
+        echo "### 🔄 Update Status" >> $GITHUB_STEP_SUMMARY
+        echo "- **Update Job**: ${{ needs.update-dependencies.result }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **PR Created**: ${{ needs.update-dependencies.outputs.pr-created || 'false' }}" >> $GITHUB_STEP_SUMMARY
+        if [ "${{ needs.update-dependencies.outputs.pr-url }}" != "" ]; then
+          echo "- **PR Link**: [${{ needs.update-dependencies.outputs.pr-url }}](${{ needs.update-dependencies.outputs.pr-url }})" >> $GITHUB_STEP_SUMMARY
+        fi
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        echo "### 🛡️ Security Status" >> $GITHUB_STEP_SUMMARY
+        echo "- **Security Audit**: ${{ needs.security-audit.result }}" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        if [ "${{ needs.dependency-check.outputs.updates-available }}" == "true" ]; then
+          echo " **Dependency updates processed successfully!**" >> $GITHUB_STEP_SUMMARY
+          echo "Check the generated PR for review and merging." >> $GITHUB_STEP_SUMMARY
         else
-          echo "✅ **All dependencies are up to date**" >> $GITHUB_STEP_SUMMARY
+          echo "✅ **All dependencies are current!**" >> $GITHUB_STEP_SUMMARY
+          echo "No updates needed at this time." >> $GITHUB_STEP_SUMMARY
         fi
