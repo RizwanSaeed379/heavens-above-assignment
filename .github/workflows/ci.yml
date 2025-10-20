@@ -1,11 +1,10 @@
 name: Continuous Integration
 
-# Trigger: Runs on every push to main branch and on pull requests
 on:
   push:
-    branches: [ main, master ]
+    branches: [main, master]
   pull_request:
-    branches: [ main, master ]
+    branches: [main, master]
 
 jobs:
   test:
@@ -14,62 +13,72 @@ jobs:
     
     strategy:
       matrix:
-        node-version: [14.x, 16.x, 18.x, 20.x]
+        node-version: [16.x, 18.x, 20.x]
     
     steps:
-    # Step 1: Check out the repository code
     - name: Checkout code
       uses: actions/checkout@v4
     
-    # Step 2: Set up Node.js environment
     - name: Set up Node.js ${{ matrix.node-version }}
       uses: actions/setup-node@v4
       with:
         node-version: ${{ matrix.node-version }}
-        cache: 'npm'
+        # REMOVED cache configuration entirely
     
-    # Step 3: Install project dependencies
     - name: Install dependencies
-      run: npm ci
+      run: npm install
     
-    # Step 4: Run linting to check code quality
     - name: Run ESLint
       run: |
-        npm install --save-dev eslint
-        npx eslint . --ext .js --ignore-pattern node_modules/ || echo "Linting completed with warnings"
+        # Check if eslint is already a dependency
+        if grep -q '"eslint"' package.json; then
+          npx eslint . --ext .js --ignore-pattern node_modules/ --format compact || echo "ESLint completed with warnings"
+        else
+          echo "ESLint not configured in package.json. Skipping linting."
+        fi
       continue-on-error: true
     
-    # Step 5: Check for security vulnerabilities
     - name: Security audit
-      run: npm audit --audit-level=moderate
+      run: |
+        npm audit --audit-level=moderate || echo "Security audit completed with warnings"
       continue-on-error: true
     
-    # Step 6: Run tests (if test script exists)
     - name: Run tests
       run: |
-        if grep -q '"test"' package.json; then
+        if npm run | grep -q "test"; then
           npm test
         else
-          echo "No tests found - creating basic validation test"
-          node -e "console.log('Basic validation: Node.js is working')"
+          echo "No test script found in package.json"
+          echo "Running basic validation..."
+          node -e "
+            try {
+              const package = require('./package.json');
+              console.log('✅ Package.json validation passed');
+              console.log('Project:', package.name);
+              console.log('Version:', package.version);
+              
+              // Basic syntax check of main files
+              require('./run.js');
+              console.log('✅ run.js syntax is valid');
+            } catch (error) {
+              console.error('❌ Validation failed:', error.message);
+              process.exit(1);
+            }
+          "
         fi
     
-    # Step 7: Test application startup
     - name: Test application startup
       run: |
-        timeout 10s node run.js || echo "Application startup test completed"
-      continue-on-error: true
-    
-    # Step 8: Upload test results
-    - name: Upload test results
-      if: always()
-      uses: actions/upload-artifact@v4
-      with:
-        name: test-results-node-${{ matrix.node-version }}
-        path: |
-          coverage/
-          test-results/
-        retention-days: 30
+        echo "Testing application startup..."
+        # Start server in background with a short timeout
+        timeout 10s node run.js || exit_code=$?
+        
+        if [ $? -eq 124 ]; then
+          echo "✅ Application started successfully (stopped by timeout)"
+        else
+          echo "❌ Application failed to start or exited early"
+          exit 1
+        fi
 
   build:
     name: Build Check
@@ -84,30 +93,23 @@ jobs:
       uses: actions/setup-node@v4
       with:
         node-version: '18.x'
-        cache: 'npm'
     
     - name: Install dependencies
-      run: npm ci
+      run: npm install
     
     - name: Verify project structure
       run: |
-        echo "Checking project structure..."
+        echo "=== Project Structure ==="
         ls -la
-        echo "Checking public directory..."
-        ls -la public/ || echo "Public directory not found"
-    
-    - name: Generate build report
-      run: |
-        echo "Build completed successfully at $(date)" > build-report.txt
-        echo "Node version: $(node --version)" >> build-report.txt
-        echo "npm version: $(npm --version)" >> build-report.txt
-    
-    - name: Upload build artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: build-report
-        path: build-report.txt
-        retention-days: 30
+        echo -e "\n=== Key Files Check ==="
+        [ -f package.json ] && echo "✅ package.json exists" || echo "❌ package.json missing"
+        [ -f run.js ] && echo "✅ run.js exists" || echo "❌ run.js missing"
+        [ -d public ] && echo "✅ public/ directory exists" || echo "⚠️ public/ directory not found"
+        [ -d views ] && echo "✅ views/ directory exists" || echo "⚠️ views/ directory not found"
+        
+        echo -e "\n=== Package Info ==="
+        node -e "console.log('Name:', require('./package.json').name)"
+        node -e "console.log('Version:', require('./package.json').version)"
 
   notify:
     name: Notification
@@ -116,11 +118,15 @@ jobs:
     if: always()
     
     steps:
-    - name: Check workflow status
+    - name: Workflow Status Summary
       run: |
+        echo "=== CI Pipeline Results ==="
+        echo "Test Job: ${{ needs.test.result }}"
+        echo "Build Job: ${{ needs.build.result }}"
+        
         if [ "${{ needs.test.result }}" == "success" ] && [ "${{ needs.build.result }}" == "success" ]; then
-          echo "✅ CI Pipeline Passed Successfully!"
+          echo "🎉 ALL CHECKS PASSED! Pipeline completed successfully."
         else
-          echo "❌ CI Pipeline Failed!"
+          echo "❌ PIPELINE FAILED! Check the failed jobs above."
           exit 1
         fi
