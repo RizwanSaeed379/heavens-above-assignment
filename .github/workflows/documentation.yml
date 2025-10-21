@@ -1,0 +1,325 @@
+name: Documentation Deployment
+
+# Trigger: Runs on push to main and when documentation files change
+on:
+  push:
+    branches: [ main, master ]
+    paths:
+      - 'docs/**'
+      - '*.md'
+      - 'README.md'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+jobs:
+  build-docs:
+    name: Build Documentation
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Full history for git info
+    
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18.x'
+    
+    - name: Create docs directory structure
+      run: |
+        mkdir -p docs-build
+        mkdir -p docs-build/api
+        mkdir -p docs-build/guides
+        mkdir -p docs-build/assets
+    
+    - name: Process README
+      run: |
+        echo "Processing README.md..."
+        if [ -f README.md ]; then
+          cp README.md docs-build/index.md
+        else
+          echo "# Heavens Above Documentation" > docs-build/index.md
+          echo "Documentation for the Heavens Above satellite tracking application." >> docs-build/index.md
+        fi
+    
+    - name: Generate API documentation
+      run: |
+        echo "# API Documentation" > docs-build/api/index.md
+        echo "" >> docs-build/api/index.md
+        echo "## Overview" >> docs-build/api/index.md
+        echo "This project scrapes satellite data from Heavens Above website." >> docs-build/api/index.md
+        echo "" >> docs-build/api/index.md
+        echo "## Main Script" >> docs-build/api/index.md
+        echo "- **run.js**: Main scraping script" >> docs-build/api/index.md
+        echo "" >> docs-build/api/index.md
+        echo "## Usage" >> docs-build/api/index.md
+        echo "\`\`\`bash" >> docs-build/api/index.md
+        echo "node run.js" >> docs-build/api/index.md
+        echo "\`\`\`" >> docs-build/api/index.md
+    
+    - name: Create user guide
+      run: |
+        cat > docs-build/guides/getting-started.md << 'EOF'
+        # Getting Started Guide
+        
+        ## Prerequisites
+        - Node.js 12.10.0 or later
+        - npm (Node Package Manager)
+        
+        ## Installation
+        
+        1. Clone the repository:
+        ```bash
+        git clone https://github.com/YOUR-USERNAME/heavens-above.git
+        cd heavens-above
+        ```
+        
+        2. Install dependencies:
+        ```bash
+        npm install
+        ```
+        
+        3. Run the application:
+        ```bash
+        node run.js
+        ```
+        
+        ## How It Works
+        The application scrapes satellite transit information from the Heavens Above website and stores the data in the `public/data` directory.
+        
+        ## Viewing Results
+        Open `public/index.html` in your web browser to view the scraped satellite data.
+        
+        ## Troubleshooting
+        - Ensure Node.js version is 12.10.0 or higher
+        - Check internet connection for web scraping
+        - Verify all dependencies are installed
+        EOF
+    
+    - name: Generate project info
+      run: |
+        cat > docs-build/project-info.md << EOF
+        # Project Information
+        
+        **Last Updated**: $(date)
+        **Build Number**: ${{ github.run_number }}
+        **Commit**: ${{ github.sha }}
+        
+        ## Repository
+        - **URL**: ${{ github.server_url }}/${{ github.repository }}
+        - **Branch**: ${{ github.ref_name }}
+        
+        ## Build Information
+        - **Workflow**: ${{ github.workflow }}
+        - **Actor**: ${{ github.actor }}
+        - **Event**: ${{ github.event_name }}
+        EOF
+    
+    - name: Create documentation index
+      run: |
+        cat > docs-build/docs-index.html << 'EOF'
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Heavens Above Documentation</title>
+            <style>
+                body {
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                    max-width: 1200px;
+                    margin: 0 auto;
+                    padding: 20px;
+                    background: #f5f5f5;
+                }
+                .header {
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    color: white;
+                    padding: 40px;
+                    border-radius: 10px;
+                    margin-bottom: 30px;
+                }
+                .docs-grid {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+                    gap: 20px;
+                    margin-top: 20px;
+                }
+                .doc-card {
+                    background: white;
+                    padding: 30px;
+                    border-radius: 10px;
+                    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                    transition: transform 0.3s;
+                }
+                .doc-card:hover {
+                    transform: translateY(-5px);
+                    box-shadow: 0 5px 20px rgba(0,0,0,0.15);
+                }
+                .doc-card h3 {
+                    margin-top: 0;
+                    color: #667eea;
+                }
+                a {
+                    color: #667eea;
+                    text-decoration: none;
+                }
+                a:hover {
+                    text-decoration: underline;
+                }
+            </style>
+        </head>
+        <body>
+            <div class="header">
+                <h1>🛰️ Heavens Above Documentation</h1>
+                <p>Complete documentation for the satellite tracking application</p>
+            </div>
+            
+            <div class="docs-grid">
+                <div class="doc-card">
+                    <h3>📖 Getting Started</h3>
+                    <p>Learn how to install and run the application</p>
+                    <a href="guides/getting-started.md">Read Guide →</a>
+                </div>
+                
+                <div class="doc-card">
+                    <h3>🔧 API Documentation</h3>
+                    <p>Technical documentation and API reference</p>
+                    <a href="api/index.md">View API Docs →</a>
+                </div>
+                
+                <div class="doc-card">
+                    <h3>ℹ️ Project Information</h3>
+                    <p>Build details and project metadata</p>
+                    <a href="project-info.md">View Info →</a>
+                </div>
+                
+                <div class="doc-card">
+                    <h3>📝 README</h3>
+                    <p>Main project documentation</p>
+                    <a href="index.md">Read README →</a>
+                </div>
+            </div>
+        </body>
+        </html>
+        EOF
+    
+    - name: Upload documentation artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: documentation
+        path: docs-build/
+        retention-days: 90
+
+  deploy-docs:
+    name: Deploy to GitHub Pages
+    runs-on: ubuntu-latest
+    needs: build-docs
+    
+    environment:
+      name: github-pages-docs
+      url: ${{ steps.deployment.outputs.page_url }}
+    
+    steps:
+    - name: Download documentation
+      uses: actions/download-artifact@v4
+      with:
+        name: documentation
+        path: docs-site
+    
+    - name: Setup Pages
+      uses: actions/configure-pages@v4
+    
+    - name: Upload to Pages
+      uses: actions/upload-pages-artifact@v3
+      with:
+        path: docs-site
+    
+    - name: Deploy to GitHub Pages
+      id: deployment
+      uses: actions/deploy-pages@v4
+
+  validate-docs:
+    name: Validate Documentation
+    runs-on: ubuntu-latest
+    needs: build-docs
+    
+    steps:
+    - name: Download documentation
+      uses: actions/download-artifact@v4
+      with:
+        name: documentation
+    
+    - name: Check documentation files
+      run: |
+        echo "Validating documentation structure..."
+        
+        # Check for required files
+        if [ -f "index.md" ]; then
+          echo "✅ Index file exists"
+        else
+          echo "❌ Index file missing"
+          exit 1
+        fi
+        
+        # List all documentation files
+        echo "Documentation files:"
+        find . -type f -name "*.md" -o -name "*.html"
+    
+    - name: Check for broken links
+      run: |
+        echo "Checking for common markdown issues..."
+        # Check for empty markdown files
+        find . -name "*.md" -size 0 && echo "⚠️ Empty markdown files found" || echo "✅ No empty files"
+    
+    - name: Generate validation report
+      run: |
+        echo "## 📚 Documentation Validation Report" > validation-report.md
+        echo "" >> validation-report.md
+        echo "Generated: $(date)" >> validation-report.md
+        echo "" >> validation-report.md
+        echo "### Files Generated" >> validation-report.md
+        find . -type f \( -name "*.md" -o -name "*.html" \) >> validation-report.md
+    
+    - name: Upload validation report
+      uses: actions/upload-artifact@v4
+      with:
+        name: validation-report
+        path: validation-report.md
+        retention-days: 30
+
+  docs-summary:
+    name: Documentation Summary
+    runs-on: ubuntu-latest
+    needs: [build-docs, deploy-docs, validate-docs]
+    if: always()
+    
+    steps:
+    - name: Create summary
+      run: |
+        echo "## 📚 Documentation Deployment Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Status" >> $GITHUB_STEP_SUMMARY
+        echo "- **Build**: ${{ needs.build-docs.result }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Deploy**: ${{ needs.deploy-docs.result }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Validation**: ${{ needs.validate-docs.result }}" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Information" >> $GITHUB_STEP_SUMMARY
+        echo "- **Deployed At**: $(date)" >> $GITHUB_STEP_SUMMARY
+        echo "- **Commit**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Branch**: ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        if [ "${{ needs.deploy-docs.result }}" == "success" ]; then
+          echo "✅ **Documentation deployed successfully!**" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Visit your documentation at your GitHub Pages URL" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "❌ **Documentation deployment failed**" >> $GITHUB_STEP_SUMMARY
+        fi
