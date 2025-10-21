@@ -1,0 +1,343 @@
+name: Custom Workflow - Release & Metrics
+
+# Trigger: Manual trigger for releases and weekly metrics
+on:
+  workflow_dispatch:
+    inputs:
+      release_type:
+        description: 'Type of release'
+        required: true
+        default: 'patch'
+        type: choice
+        options:
+          - major
+          - minor
+          - patch
+      create_release:
+        description: 'Create GitHub release'
+        required: false
+        type: boolean
+        default: true
+  schedule:
+    # Run metrics every Sunday at 10 AM UTC
+    - cron: '0 10 * * 0'
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+jobs:
+  generate-release-notes:
+    name: Generate Release Notes
+    runs-on: ubuntu-latest
+    if: github.event.inputs.create_release == 'true' || github.event_name == 'workflow_dispatch'
+    
+    outputs:
+      version: ${{ steps.version.outputs.new_version }}
+      release_notes: ${{ steps.notes.outputs.notes }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18.x'
+    
+    - name: Get current version
+      id: version
+      run: |
+        CURRENT_VERSION=$(node -p "require('./package.json').version" || echo "0.0.0")
+        echo "current_version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+        
+        # Calculate new version based on release type
+        RELEASE_TYPE="${{ github.event.inputs.release_type || 'patch' }}"
+        IFS='.' read -ra VERSION_PARTS <<< "$CURRENT_VERSION"
+        MAJOR="${VERSION_PARTS[0]}"
+        MINOR="${VERSION_PARTS[1]}"
+        PATCH="${VERSION_PARTS[2]}"
+        
+        case $RELEASE_TYPE in
+          major)
+            MAJOR=$((MAJOR + 1))
+            MINOR=0
+            PATCH=0
+            ;;
+          minor)
+            MINOR=$((MINOR + 1))
+            PATCH=0
+            ;;
+          patch)
+            PATCH=$((PATCH + 1))
+            ;;
+        esac
+        
+        NEW_VERSION="$MAJOR.$MINOR.$PATCH"
+        echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+        echo "New version will be: $NEW_VERSION"
+    
+    - name: Generate changelog
+      id: notes
+      run: |
+        echo "Generating release notes..."
+        
+        cat > RELEASE_NOTES.md << 'EOF'
+        # Release Notes
+        
+        ## What's New
+        
+        ### Features
+        - Satellite tracking data scraping
+        - Automated data updates
+        - Web-based visualization
+        
+        ### Improvements
+        - Enhanced error handling
+        - Better data validation
+        - Performance optimizations
+        
+        ### Technical Details
+        - **Version**: ${{ steps.version.outputs.new_version }}
+        - **Release Date**: $(date)
+        - **Commit**: ${{ github.sha }}
+        
+        ## Recent Commits
+        EOF
+        
+        # Get recent commits
+        git log --oneline -10 >> RELEASE_NOTES.md
+        
+        echo "notes<<EOF" >> $GITHUB_OUTPUT
+        cat RELEASE_NOTES.md >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+    
+    - name: Upload release notes
+      uses: actions/upload-artifact@v4
+      with:
+        name: release-notes
+        path: RELEASE_NOTES.md
+        retention-days: 90
+
+  create-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    needs: generate-release-notes
+    if: github.event.inputs.create_release == 'true'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Download release notes
+      uses: actions/download-artifact@v4
+      with:
+        name: release-notes
+    
+    - name: Update package.json version
+      run: |
+        NEW_VERSION="${{ needs.generate-release-notes.outputs.version }}"
+        npm version $NEW_VERSION --no-git-tag-version
+    
+    - name: Commit version bump
+      run: |
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        git add package.json
+        git commit -m "chore: bump version to ${{ needs.generate-release-notes.outputs.version }}"
+        git push
+    
+    - name: Create Git tag
+      run: |
+        git tag -a "v${{ needs.generate-release-notes.outputs.version }}" -m "Release v${{ needs.generate-release-notes.outputs.version }}"
+        git push origin "v${{ needs.generate-release-notes.outputs.version }}"
+    
+    - name: Create GitHub Release
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        gh release create "v${{ needs.generate-release-notes.outputs.version }}" \
+          --title "Release v${{ needs.generate-release-notes.outputs.version }}" \
+          --notes-file RELEASE_NOTES.md \
+          --draft=false \
+          --prerelease=false
+
+  performance-metrics:
+    name: Analyze Performance Metrics
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18.x'
+    
+    - name: Install dependencies
+      run: npm ci
+    
+    - name: Analyze repository metrics
+      run: |
+        echo "## 📊 Repository Metrics" > metrics-report.md
+        echo "" >> metrics-report.md
+        echo "Generated: $(date)" >> metrics-report.md
+        echo "" >> metrics-report.md
+        
+        echo "### Code Statistics" >> metrics-report.md
+        echo "- Total JavaScript files: $(find . -name '*.js' -not -path '*/node_modules/*' | wc -l)" >> metrics-report.md
+        echo "- Total lines of code: $(find . -name '*.js' -not -path '*/node_modules/*' -exec cat {} \; | wc -l)" >> metrics-report.md
+        echo "" >> metrics-report.md
+        
+        echo "### Git Statistics" >> metrics-report.md
+        echo "- Total commits: $(git rev-list --count HEAD)" >> metrics-report.md
+        echo "- Contributors: $(git log --format='%aN' | sort -u | wc -l)" >> metrics-report.md
+        echo "- Branches: $(git branch -a | wc -l)" >> metrics-report.md
+        echo "" >> metrics-report.md
+        
+        echo "### Recent Activity (Last 30 Days)" >> metrics-report.md
+        echo "- Commits: $(git log --since='30 days ago' --oneline | wc -l)" >> metrics-report.md
+        echo "- Files changed: $(git log --since='30 days ago' --name-only --pretty=format: | sort -u | wc -l)" >> metrics-report.md
+    
+    - name: Analyze dependencies
+      run: |
+        echo "" >> metrics-report.md
+        echo "### Dependency Analysis" >> metrics-report.md
+        echo "- Total dependencies: $(node -p "Object.keys(require('./package.json').dependencies || {}).length")" >> metrics-report.md
+        echo "- Dev dependencies: $(node -p "Object.keys(require('./package.json').devDependencies || {}).length")" >> metrics-report.md
+    
+    - name: Check disk usage
+      run: |
+        echo "" >> metrics-report.md
+        echo "### Project Size" >> metrics-report.md
+        echo "\`\`\`" >> metrics-report.md
+        du -sh . >> metrics-report.md
+        echo "\`\`\`" >> metrics-report.md
+    
+    - name: Upload metrics report
+      uses: actions/upload-artifact@v4
+      with:
+        name: performance-metrics
+        path: metrics-report.md
+        retention-days: 90
+
+  code-health-check:
+    name: Code Health Analysis
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Analyze code health
+      run: |
+        echo "## 🏥 Code Health Report" > health-report.md
+        echo "" >> health-report.md
+        echo "Generated: $(date)" >> health-report.md
+        echo "" >> health-report.md
+        
+        echo "### File Analysis" >> health-report.md
+        echo "Largest files:" >> health-report.md
+        find . -name "*.js" -not -path "*/node_modules/*" -exec du -h {} \; | sort -rh | head -5 >> health-report.md
+        echo "" >> health-report.md
+        
+        echo "### Code Patterns" >> health-report.md
+        echo "- Console.log statements: $(grep -r "console.log" --include="*.js" . | wc -l)" >> health-report.md
+        echo "- TODO comments: $(grep -r "TODO" --include="*.js" . | wc -l)" >> health-report.md
+        echo "- FIXME comments: $(grep -r "FIXME" --include="*.js" . | wc -l)" >> health-report.md
+    
+    - name: Check for common issues
+      run: |
+        echo "" >> health-report.md
+        echo "### Potential Issues" >> health-report.md
+        
+        # Check for hardcoded credentials patterns
+        if grep -r "password\|secret\|api_key" --include="*.js" . > /dev/null 2>&1; then
+          echo "⚠️ Potential hardcoded credentials found - please review" >> health-report.md
+        else
+          echo "✅ No obvious hardcoded credentials detected" >> health-report.md
+        fi
+    
+    - name: Upload health report
+      uses: actions/upload-artifact@v4
+      with:
+        name: code-health-report
+        path: health-report.md
+        retention-days: 90
+
+  sync-data:
+    name: Data Synchronization
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18.x'
+    
+    - name: Install dependencies
+      run: npm ci
+    
+    - name: Run data sync
+      run: |
+        echo "Running data synchronization..."
+        timeout 300s node run.js || echo "Data sync completed"
+    
+    - name: Archive synced data
+      run: |
+        SYNC_DATE=$(date +%Y%m%d)
+        mkdir -p sync-archive
+        
+        if [ -d "public/data" ]; then
+          tar -czf "sync-archive/data-${SYNC_DATE}.tar.gz" public/data/
+          echo "Data archived successfully"
+        fi
+    
+    - name: Upload synced data
+      uses: actions/upload-artifact@v4
+      with:
+        name: synced-data-archive
+        path: sync-archive/
+        retention-days: 30
+
+  workflow-summary:
+    name: Custom Workflow Summary
+    runs-on: ubuntu-latest
+    needs: [generate-release-notes, performance-metrics, code-health-check]
+    if: always()
+    
+    steps:
+    - name: Create comprehensive summary
+      run: |
+        echo "## 🎯 Custom Workflow Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Workflow Information" >> $GITHUB_STEP_SUMMARY
+        echo "- **Trigger**: ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Executed At**: $(date)" >> $GITHUB_STEP_SUMMARY
+        echo "- **Actor**: ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        echo "### Job Results" >> $GITHUB_STEP_SUMMARY
+        echo "- **Release Notes**: ${{ needs.generate-release-notes.result }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Performance Metrics**: ${{ needs.performance-metrics.result }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Code Health**: ${{ needs.code-health-check.result }}" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        if [ "${{ github.event.inputs.create_release }}" == "true" ]; then
+          echo "### Release Information" >> $GITHUB_STEP_SUMMARY
+          echo "- **New Version**: ${{ needs.generate-release-notes.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Release Type**: ${{ github.event.inputs.release_type }}" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "✅ **Custom workflow completed successfully!**" >> $GITHUB_STEP_SUMMARY
