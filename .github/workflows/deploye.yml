@@ -142,7 +142,7 @@ jobs:
         echo "" >> $GITHUB_STEP_SUMMARY
         
         if [ "${{ needs.deploy-github-pages.result }}" == "success" ]; then
-          echo "✅ **Deployment Successful!**" >> $GITHUB_STEP_SUMMARY
+          echo " **Deployment Successful!**" >> $GITHUB_STEP_SUMMARY
         else
-          echo "❌ **Deployment Failed!**" >> $GITHUB_STEP_SUMMARY
+          echo " **Deployment Failed!**" >> $GITHUB_STEP_SUMMARY
         fi
