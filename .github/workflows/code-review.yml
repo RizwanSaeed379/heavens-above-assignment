@@ -39,7 +39,7 @@ jobs:
     
     - name: Generate code quality report
       run: |
-        echo "## 📊 Code Quality Report" > code-quality-report.md
+        echo "##  Code Quality Report" > code-quality-report.md
         echo "" >> code-quality-report.md
         echo "Generated: $(date)" >> code-quality-report.md
         echo "" >> code-quality-report.md
@@ -83,7 +83,7 @@ jobs:
     
     - name: Generate security report
       run: |
-        echo "## 🔒 Security Scan Report" > security-scan-report.md
+        echo "##  Security Scan Report" > security-scan-report.md
         echo "" >> security-scan-report.md
         echo "Generated: $(date)" >> security-scan-report.md
         echo "" >> security-scan-report.md
@@ -110,7 +110,7 @@ jobs:
     - name: Check file structure
       run: |
         echo "Checking project structure..."
-        echo "## 📁 Project Structure Analysis" > structure-report.md
+        echo "##  Project Structure Analysis" > structure-report.md
         echo "" >> structure-report.md
         echo "### Directory Structure" >> structure-report.md
         echo '```' >> structure-report.md
@@ -123,10 +123,10 @@ jobs:
         find . -name "*.js" -not -path "*/node_modules/*" -exec grep -l "	" {} \; > tabs.txt 2>/dev/null || true
         
         if [ -s tabs.txt ]; then
-          echo "⚠️ Files with tabs found (should use spaces):"
+          echo " Files with tabs found (should use spaces):"
           cat tabs.txt
         else
-          echo "✅ No tab characters found"
+          echo " No tab characters found"
         fi
     
     - name: Check for TODO comments
@@ -157,7 +157,7 @@ jobs:
     - name: Analyze code complexity
       run: |
         echo "Analyzing code complexity..."
-        echo "## 📈 Code Complexity Report" > complexity-summary.md
+        echo "##  Code Complexity Report" > complexity-summary.md
         echo "" >> complexity-summary.md
         echo "### Complexity Metrics" >> complexity-summary.md
         echo "- **Files analyzed**: $(find . -name '*.js' -not -path '*/node_modules/*' | wc -l)" >> complexity-summary.md
@@ -194,7 +194,7 @@ jobs:
         echo "- **Complexity Analysis**: ${{ needs.complexity-analysis.result }}" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         
-        echo "### ✅ Review Checklist" >> $GITHUB_STEP_SUMMARY
+        echo "###  Review Checklist" >> $GITHUB_STEP_SUMMARY
         echo "- [ ] Code follows project conventions" >> $GITHUB_STEP_SUMMARY
         echo "- [ ] No security vulnerabilities introduced" >> $GITHUB_STEP_SUMMARY
         echo "- [ ] Dependencies are properly managed" >> $GITHUB_STEP_SUMMARY
@@ -203,11 +203,11 @@ jobs:
         echo "" >> $GITHUB_STEP_SUMMARY
         
         if [ "${{ needs.code-quality.result }}" == "success" ] && [ "${{ needs.security-scan.result }}" == "success" ]; then
-          echo "🎉 **Code review checks passed!**" >> $GITHUB_STEP_SUMMARY
+          echo " **Code review checks passed!**" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "The code meets quality and security standards." >> $GITHUB_STEP_SUMMARY
         else
-          echo "⚠️ **Some checks require attention**" >> $GITHUB_STEP_SUMMARY
+          echo " **Some checks require attention**" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "Please review the detailed reports above." >> $GITHUB_STEP_SUMMARY
         fi
