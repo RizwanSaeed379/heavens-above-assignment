@@ -177,13 +177,13 @@ jobs:
         </head>
         <body>
             <div class="header">
-                <h1>🛰️ Heavens Above Documentation</h1>
+                <h1> Heavens Above Documentation</h1>
                 <p>Complete documentation for the satellite tracking application</p>
             </div>
             
             <div class="docs-grid">
                 <div class="doc-card">
-                    <h3>📖 Getting Started</h3>
+                    <h3> Getting Started</h3>
                     <p>Learn how to install and run the application</p>
                     <a href="guides/getting-started.md">Read Guide →</a>
                 </div>
@@ -195,13 +195,13 @@ jobs:
                 </div>
                 
                 <div class="doc-card">
-                    <h3>ℹ️ Project Information</h3>
+                    <h3> Project Information</h3>
                     <p>Build details and project metadata</p>
                     <a href="project-info.md">View Info →</a>
                 </div>
                 
                 <div class="doc-card">
-                    <h3>📝 README</h3>
+                    <h3> README</h3>
                     <p>Main project documentation</p>
                     <a href="index.md">Read README →</a>
                 </div>
@@ -262,9 +262,9 @@ jobs:
         
         # Check for required files
         if [ -f "index.md" ]; then
-          echo "✅ Index file exists"
+          echo " Index file exists"
         else
-          echo "❌ Index file missing"
+          echo " Index file missing"
           exit 1
         fi
         
@@ -276,11 +276,11 @@ jobs:
       run: |
         echo "Checking for common markdown issues..."
         # Check for empty markdown files
-        find . -name "*.md" -size 0 && echo "⚠️ Empty markdown files found" || echo "✅ No empty files"
+        find . -name "*.md" -size 0 && echo " Empty markdown files found" || echo " No empty files"
     
     - name: Generate validation report
       run: |
-        echo "## 📚 Documentation Validation Report" > validation-report.md
+        echo "##  Documentation Validation Report" > validation-report.md
         echo "" >> validation-report.md
         echo "Generated: $(date)" >> validation-report.md
         echo "" >> validation-report.md
@@ -303,7 +303,7 @@ jobs:
     steps:
     - name: Create summary
       run: |
-        echo "## 📚 Documentation Deployment Summary" >> $GITHUB_STEP_SUMMARY
+        echo "##  Documentation Deployment Summary" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "### Status" >> $GITHUB_STEP_SUMMARY
         echo "- **Build**: ${{ needs.build-docs.result }}" >> $GITHUB_STEP_SUMMARY
@@ -317,9 +317,9 @@ jobs:
         echo "" >> $GITHUB_STEP_SUMMARY
         
         if [ "${{ needs.deploy-docs.result }}" == "success" ]; then
-          echo "✅ **Documentation deployed successfully!**" >> $GITHUB_STEP_SUMMARY
+          echo " **Documentation deployed successfully!**" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "Visit your documentation at your GitHub Pages URL" >> $GITHUB_STEP_SUMMARY
         else
-          echo "❌ **Documentation deployment failed**" >> $GITHUB_STEP_SUMMARY
+          echo " **Documentation deployment failed**" >> $GITHUB_STEP_SUMMARY
         fi
