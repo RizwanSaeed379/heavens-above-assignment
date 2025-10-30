@@ -1,20 +1,59 @@
-const satellite = require("./src/satellite");
-const iridium = require("./src/iridium");
+const express = require('express');
+const app = express();
+const port = process.env.PORT || 3000;
 
-var location = [39.9042, 116.4074, "%E5%8C%97%E4%BA%AC%E5%B8%82", 52, "ChST"];
-//COOKIE需要先通过浏览器调到中文
+// Serve static files from public directory
+app.use(express.static('public'));
 
-//const names = ["ISS", "IridiumFlares"];
-// https://www.heavens-above.com/PassSummary.aspx?satid=41765&lat=0&lng=0&loc=Unspecified&alt=0&tz=UCT
-
-satellite.getTable({
-	target: 25544,
-	pages: 4,
-	root: "./public/data/"
-}); //ISS
-/*
-iridium.getTable({
-	pages: 4,
-	root: "./public/data/"
+// Basic health check route (REQUIRED for Elastic Beanstalk)
+app.get('/', (req, res) => {
+    res.send(`
+        <h1>Heavens Above Scraper</h1>
+        <p>Application is running successfully!</p>
+        <p>Scraping functionality will run in the background.</p>
+    `);
 });
-*/
+
+// Health check endpoint for Elastic Beanstalk
+app.get('/health', (req, res) => {
+    res.status(200).json({ status: 'OK', message: 'Server is healthy' });
+});
+
+// Start the web server
+app.listen(port, '0.0.0.0', () => {
+    console.log(`Heavens Above server running on port ${port}`);
+    console.log('Health check available at: http://0.0.0.0:' + port + '/');
+    
+    // Run your scraping code after a short delay
+    setTimeout(() => {
+        console.log('Starting background scraping tasks...');
+        runScrapingTasks();
+    }, 3000);
+});
+
+// Your existing scraping functionality
+function runScrapingTasks() {
+    try {
+        const satellite = require("./src/satellite");
+        const iridium = require("./src/iridium");
+        
+        console.log('Running ISS satellite data scraping...');
+        satellite.getTable({
+            target: 25544,
+            pages: 4,
+            root: "./public/data/"
+        });
+        
+        // Uncomment if you want Iridium flares too
+        /*
+        console.log('Running Iridium flares scraping...');
+        iridium.getTable({
+            pages: 4,
+            root: "./public/data/"
+        });
+        */
+        
+    } catch (error) {
+        console.error('Error running scraping tasks:', error);
+    }
+}
