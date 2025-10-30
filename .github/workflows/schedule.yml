@@ -130,7 +130,7 @@ jobs:
     steps:
     - name: Check job statuses
       run: |
-        echo "## 🏥 Health Check Report" >> $GITHUB_STEP_SUMMARY
+        echo "##  Health Check Report" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "- **Data Scraping**: ${{ needs.data-scraping.result }}" >> $GITHUB_STEP_SUMMARY
         echo "- **Backup**: ${{ needs.backup.result }}" >> $GITHUB_STEP_SUMMARY
@@ -141,9 +141,9 @@ jobs:
     - name: Send notification
       run: |
         if [ "${{ needs.data-scraping.result }}" == "success" ]; then
-          echo "✅ Scheduled tasks completed successfully!"
+          echo " Scheduled tasks completed successfully!"
         else
-          echo "⚠️ Some tasks encountered issues"
+          echo " Some tasks encountered issues"
         fi
 
   weekly-maintenance:
