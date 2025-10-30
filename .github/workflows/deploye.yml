@@ -131,7 +131,7 @@ jobs:
     steps:
     - name: Generate deployment summary
       run: |
-        echo "## 🚀 Deployment Summary" >> $GITHUB_STEP_SUMMARY
+        echo "##  Deployment Summary" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "- **Build Status**: ${{ needs.build.result }}" >> $GITHUB_STEP_SUMMARY
         echo "- **Test Status**: ${{ needs.test-deployment.result }}" >> $GITHUB_STEP_SUMMARY
