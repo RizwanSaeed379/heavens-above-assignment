@@ -185,7 +185,7 @@ jobs:
     
     - name: Analyze repository metrics
       run: |
-        echo "## 📊 Repository Metrics" > metrics-report.md
+        echo "##  Repository Metrics" > metrics-report.md
         echo "" >> metrics-report.md
         echo "Generated: $(date)" >> metrics-report.md
         echo "" >> metrics-report.md
@@ -259,9 +259,9 @@ jobs:
         
         # Check for hardcoded credentials patterns
         if grep -r "password\|secret\|api_key" --include="*.js" . > /dev/null 2>&1; then
-          echo "⚠️ Potential hardcoded credentials found - please review" >> health-report.md
+          echo " Potential hardcoded credentials found - please review" >> health-report.md
         else
-          echo "✅ No obvious hardcoded credentials detected" >> health-report.md
+          echo " No obvious hardcoded credentials detected" >> health-report.md
         fi
     
     - name: Upload health report
@@ -340,4 +340,4 @@ jobs:
         fi
         
         echo "" >> $GITHUB_STEP_SUMMARY
-        echo "✅ **Custom workflow completed successfully!**" >> $GITHUB_STEP_SUMMARY
+        echo " **Custom workflow completed successfully!**" >> $GITHUB_STEP_SUMMARY
