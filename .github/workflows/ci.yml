@@ -30,31 +30,31 @@ jobs:
     - name: Verify project structure
       run: |
         echo "=== Project Structure Validation ==="
-        [ -f package.json ] && echo "✅ package.json exists" || exit 1
-        [ -f run.js ] && echo "✅ run.js exists" || exit 1
-        [ -d public ] && echo "✅ public/ directory exists" || echo "⚠️ public/ directory not found"
-        [ -d views ] && echo "✅ views/ directory exists" || echo "⚠️ views/ directory not found"
+        [ -f package.json ] && echo "package.json exists" || exit 1
+        [ -f run.js ] && echo "run.js exists" || exit 1
+        [ -d public ] && echo " public/ directory exists" || echo " public/ directory not found"
+        [ -d views ] && echo " views/ directory exists" || echo " views/ directory not found"
         
         echo "=== Package Validation ==="
         node -e "
           const pkg = require('./package.json');
-          console.log('✅ Package name:', pkg.name);
-          console.log('✅ Package version:', pkg.version);
-          console.log('✅ Dependencies:', Object.keys(pkg.dependencies || {}).join(', ') || 'None');
-          console.log('✅ Scripts:', Object.keys(pkg.scripts || {}).join(', ') || 'None');
+          console.log(' Package name:', pkg.name);
+          console.log(' Package version:', pkg.version);
+          console.log(' Dependencies:', Object.keys(pkg.dependencies || {}).join(', ') || 'None');
+          console.log(' Scripts:', Object.keys(pkg.scripts || {}).join(', ') || 'None');
         "
     
     - name: Syntax check
       run: |
         echo "=== Syntax Validation ==="
-        node -c run.js && echo "✅ run.js syntax valid"
-        find . -name "*.js" -not -path "./node_modules/*" -not -path "./public/*" -exec echo "Checking {}" \; -exec node -c {} \; || echo "⚠️ Some files may have syntax warnings"
+        node -c run.js && echo " run.js syntax valid"
+        find . -name "*.js" -not -path "./node_modules/*" -not -path "./public/*" -exec echo "Checking {}" \; -exec node -c {} \; || echo " Some files may have syntax warnings"
       continue-on-error: true
     
     - name: Security audit
       run: |
         echo "=== Security Audit ==="
-        npm audit --audit-level=high || echo "⚠️ Security audit completed with findings"
+        npm audit --audit-level=high || echo " Security audit completed with findings"
       continue-on-error: true
 
   quality-check:
@@ -81,21 +81,21 @@ jobs:
         # Check for console.log statements (basic quality check)
         echo "Checking for console.log statements..."
         if find . -name "*.js" -not -path "./node_modules/*" -exec grep -l "console.log" {} \; | grep -v "^$"; then
-          echo "⚠️ Found console.log statements (consider removing for production)"
+          echo " Found console.log statements (consider removing for production)"
         else
-          echo "✅ No console.log statements found"
+          echo " No console.log statements found"
         fi
         
         # Check file sizes
         echo "Checking large files..."
-        find . -name "*.js" -not -path "./node_modules/*" -size +100k -exec echo "⚠️ Large file: {}" \; || echo "✅ No unusually large JavaScript files"
+        find . -name "*.js" -not -path "./node_modules/*" -size +100k -exec echo " Large file: {}" \; || echo " No unusually large JavaScript files"
         
         # Check for environment variables usage
         echo "Checking for environment variables..."
         if find . -name "*.js" -not -path "./node_modules/*" -exec grep -l "process.env" {} \; | grep -v "^$"; then
-          echo "✅ Environment variables detected"
+          echo " Environment variables detected"
         else
-          echo "ℹ️ No environment variables detected"
+          echo " No environment variables detected"
         fi
 
   build-report:
@@ -116,28 +116,28 @@ jobs:
         ## Run: $\{{ github.run_id }}
         ## Timestamp: $(date)
         
-        ## 📊 Summary
+        ##  Summary
         - **Project**: $\{{ github.repository }}
         - **Commit**: $\{{ github.sha }}
         - **Branch**: $\{{ github.ref }}
         
-        ## ✅ Validation Results
+        ##  Validation Results
         - Project structure: VALID
         - Package.json: VALID  
         - Dependencies: INSTALLED
         - Syntax: CHECKED
         
-        ## 🔍 Quality Metrics
+        ##  Quality Metrics
         - Code quality checks: COMPLETED
         - Security audit: PERFORMED
         - File structure: ANALYZED
         
-        ## 📋 Next Steps
+        ##  Next Steps
         1. Review security audit findings
         2. Consider adding unit tests
         3. Set up deployment pipeline
         
-        ## 🎯 Status: SUCCESS
+        ##  Status: SUCCESS
         The continuous integration pipeline completed successfully. All basic validations passed.
         EOF
         
@@ -166,10 +166,10 @@ jobs:
         echo "Build Report Job: ${{ needs.build-report.result }}"
         
         if [ "${{ needs.validate.result }}" == "success" ]; then
-          echo "🎉 CONTINUOUS INTEGRATION SUCCESSFUL!"
+          echo " CONTINUOUS INTEGRATION SUCCESSFUL!"
           echo "All essential validations passed."
           echo "The project is ready for the next phases."
         else
-          echo "❌ Validation failed. Please check the logs."
+          echo " Validation failed. Please check the logs."
           exit 1
         fi
