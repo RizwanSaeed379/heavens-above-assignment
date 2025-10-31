@@ -225,52 +225,50 @@ function appendThead() {
 }
 
 function showData(target, type) {
-	fetch(`data/${target}/index.json`)
-		.then(response => response.json())
-		.then(obj => {
-			if (type === 0) obj.forEach(function(ele, index) {
-				var html = `<td><input type="checkbox" class="${target}" id="${ele[property[9]]}"></td>
-					<td>${ele[property[8]]}</td>
-					<td>${ele[property[1]]}</td>
-					<td>${ele[property[7]]}</td>
-					<td>${ele[property[2]]}</td>
-					<td>
-						<a href="download.html?target=${target}&id=${ele[property[9]]}" target="_blank">查看</a>
-					</td>`;
-				for (var j = 0; j < 7; j++) {
-					if (ele[property[3]][events[j]]) {
-						for (var k in ele[property[3]][events[j]]) {
-							html += `<td>${ele[property[3]][events[j]][k]}</td>`;
-						}
-					} else {
-						for (var k = 0; k < 6; k++) {
-							html += "<td>N/A</td>";
-						}
-					}
-				}
-				if (index < 3) $("#" + target).append(`<tr class="green">${html}</tr>`);
-				else if (ele[property[8]] === 0) $("#" + target).append(`<tr class="grey">${html}</tr>`);
-				else $("#" + target).append(`<tr>${html}</tr>`);
-			});
-			else obj.forEach(function(ele, index) {
-				var html = `<td><input type="checkbox" class="${target}" id="${ele[eventsIridium[14]]}"></td>
-					<td>N/A</td>
-					<td>${ele[eventsIridium[6]]}</td>
-					<td>${ele[eventsIridium[7]]}</td>
-					<td>${ele[eventsIridium[0]]}</td>
-					<td>
-						<a href="download.html?target=${target}&id=${ele[eventsIridium[14]]}" target="_blank">查看</a>
-					</td>`;
-				var map = [1, 2, 3, 4, 5, 8, 9, 10, 11, 12];
-				for (var j = 0; j < 10; j++) {
-					html += `<td>${ele[eventsIridium[map[j]]]}</td>`;
-				}
-				$("#" + target).append(`<tr>${html}</tr>`);
-			});
-		})
-		.catch(err => {
-			console.log("Error");
-		});
+    // Use the API endpoint instead of static files
+    fetch('/api/scrape')
+        .then(response => response.json())
+        .then(response => {
+            if (response.success) {
+                let obj = response.data;
+                if (type === 0) obj.forEach(function(ele, index) {
+                    var html = `<td><input type="checkbox" class="${target}" id="${ele[property[9]]}"></td>
+                        <td>${ele[property[8]]}</td>
+                        <td>${ele[property[1]]}</td>
+                        <td>${ele[property[7]]}</td>
+                        <td>${ele[property[2]]}</td>
+                        <td>
+                            <a href="javascript:void(0)" onclick="showSatelliteDetail('${ele[property[9]]}')">查看</a>
+                        </td>`;
+                    for (var j = 0; j < 7; j++) {
+                        if (ele[property[3]][events[j]]) {
+                            for (var k in ele[property[3]][events[j]]) {
+                                html += `<td>${ele[property[3]][events[j]][k]}</td>`;
+                            }
+                        } else {
+                            for (var k = 0; k < 6; k++) {
+                                html += "<td>N/A</td>";
+                            }
+                        }
+                    }
+                    if (index < 3) $("#" + target).append(`<tr class="green">${html}</tr>`);
+                    else if (ele[property[8]] === 0) $("#" + target).append(`<tr class="grey">${html}</tr>`);
+                    else $("#" + target).append(`<tr>${html}</tr>`);
+                });
+            } else {
+                console.error('API error:', response.error);
+                $("#" + target).append('<tr><td colspan="20">Error loading data: ' + response.error + '</td></tr>');
+            }
+        })
+        .catch(err => {
+            console.log("Error", err);
+            $("#" + target).append('<tr><td colspan="20">Failed to load data from API</td></tr>');
+        });
+}
+
+// Add this function for detail view (since we can't serve static files)
+function showSatelliteDetail(id) {
+    alert('Detailed view for: ' + id + '\n\nIn this version, detailed images and tables are not available.\nThe data is loaded from the live API.');
 }
 
 for (var i = 0; i < 7; i++) appendThead();
@@ -317,38 +315,20 @@ function getTable(src) {
 }
 
 function generate() {
-	var target = $("input:checked");
-	if (target.length === 0) {
-		alert("没有选中项！");
-		return;
-	}
-	var queue = [], text1, text2;
-	target.each(function(i, o) {
-		temp = $(o).parents("tr").children();
-		if ($(o).attr("class") === "IridiumFlares") {
-			text1 = temp.eq(2).text() + temp.eq(3).text() + " 铱星闪光";
-			text2 = "最大亮度 " + temp.eq(4).text() + "等";
-		}
-		else {
-			text1 = temp.eq(2).text() + temp.eq(18).text() + " " + names[$(o).attr("class")] + "过境";
-			text2 = "最大亮度 " + temp.eq(4).text() + "等";
-		}
-		queue = queue.concat([getText(text1), getText(text2), getPic(`data/${$(o).attr("class")}/${$(o).attr("id")}.png`), getTable(`data/${$(o).attr("class")}/${$(o).attr("id")}.html`)]);
-	});
-	Promise.all(queue).then(values => {
-		console.log(values);
-		var content = `<!DOCTYPE html>
-<html>
-<head>
-<meta charset="UTF-8">
-</head>
-<body>
-${values.join("\n")}
-</body>
-</html>`;
-		var converted = htmlDocx.asBlob(content);
-		$("#download").removeClass("disabled").attr("href", URL.createObjectURL(converted)).attr("download", "天象预告.docx");
-	});
+    var target = $("input:checked");
+    if (target.length === 0) {
+        alert("没有选中项！");
+        return;
+    }
+    
+    alert('Word document generation is available in the static version.\nIn this API version, you can view the data directly from the table.');
+    
+    // For now, just show which items are selected
+    var selectedItems = [];
+    target.each(function(i, o) {
+        selectedItems.push($(o).attr('id'));
+    });
+    console.log('Selected items:', selectedItems);
 }
 </script>
 </body>
