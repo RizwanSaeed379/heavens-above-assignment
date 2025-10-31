@@ -1,4 +1,3 @@
-// api/scrape.js
 const satellite = require('../src/satellite');
 
 export default async function handler(req, res) {
