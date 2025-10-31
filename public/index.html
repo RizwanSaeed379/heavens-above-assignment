@@ -315,38 +315,20 @@ function getTable(src) {
 }
 
 function generate() {
-	var target = $("input:checked");
-	if (target.length === 0) {
-		alert("没有选中项！");
-		return;
-	}
-	var queue = [], text1, text2;
-	target.each(function(i, o) {
-		temp = $(o).parents("tr").children();
-		if ($(o).attr("class") === "IridiumFlares") {
-			text1 = temp.eq(2).text() + temp.eq(3).text() + " 铱星闪光";
-			text2 = "最大亮度 " + temp.eq(4).text() + "等";
-		}
-		else {
-			text1 = temp.eq(2).text() + temp.eq(18).text() + " " + names[$(o).attr("class")] + "过境";
-			text2 = "最大亮度 " + temp.eq(4).text() + "等";
-		}
-		queue = queue.concat([getText(text1), getText(text2), getPic(`data/${$(o).attr("class")}/${$(o).attr("id")}.png`), getTable(`data/${$(o).attr("class")}/${$(o).attr("id")}.html`)]);
-	});
-	Promise.all(queue).then(values => {
-		console.log(values);
-		var content = `<!DOCTYPE html>
-<html>
-<head>
-<meta charset="UTF-8">
-</head>
-<body>
-${values.join("\n")}
-</body>
-</html>`;
-		var converted = htmlDocx.asBlob(content);
-		$("#download").removeClass("disabled").attr("href", URL.createObjectURL(converted)).attr("download", "天象预告.docx");
-	});
+    var target = $("input:checked");
+    if (target.length === 0) {
+        alert("没有选中项！");
+        return;
+    }
+    
+    alert('Word document generation is available in the static version.\nIn this API version, you can view the data directly from the table.');
+    
+    // For now, just show which items are selected
+    var selectedItems = [];
+    target.each(function(i, o) {
+        selectedItems.push($(o).attr('id'));
+    });
+    console.log('Selected items:', selectedItems);
 }
 </script>
 </body>
