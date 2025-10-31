@@ -1,25 +1,23 @@
-const satellite = require('./src/satellite');
-const iridium = require('./src/iridium');
+// api/scrape.js
+const satellite = require('../src/satellite');
 
 export default async function handler(req, res) {
   try {
-    // Run your scraping
-    const result = await satellite.getTable({
+    const data = await satellite.getTable({
       target: 25544,
-      pages: 4,
-      root: './public/data/'
+      pages: 4
     });
     
-    res.status(200).json({ 
-      success: true, 
-      message: 'Scraping completed',
-      data: result 
+    res.status(200).json({
+      success: true,
+      data: data,
+      timestamp: new Date().toISOString()
     });
     
   } catch (error) {
-    res.status(500).json({ 
-      success: false, 
-      error: error.message 
+    res.status(500).json({
+      success: false,
+      error: error.message
     });
   }
 }
